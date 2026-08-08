@@ -1,5 +1,6 @@
 package com.pingpang.app
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,14 +22,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.pingpang.app.ui.home.HomeScreen
 import com.pingpang.app.ui.mine.MineScreen
+import com.pingpang.app.ui.mine.SettingsScreen
+import com.pingpang.app.ui.plan.CheckinScreen
+import com.pingpang.app.ui.plan.HistoryScreen
+import com.pingpang.app.ui.plan.PlanDetailScreen
+import com.pingpang.app.ui.plan.PlanEditScreen
 import com.pingpang.app.ui.plan.PlanScreen
-import com.pingpang.app.ui.video.VideoScreen
+import com.pingpang.app.ui.plan.SessionDetailScreen
+import com.pingpang.app.ui.theme.PingPangTheme
+import com.pingpang.app.ui.video.CompareScreen
+import com.pingpang.app.ui.video.RecordScreen
+import com.pingpang.app.ui.video.VideoDetailScreen
+import com.pingpang.app.ui.video.VideoLibScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,12 +56,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** 底部导航目标 */
-private data class NavItem(
-    val route: String,
-    val label: String,
-    val icon: ImageVector,
-)
+private data class NavItem(val route: String, val label: String, val icon: ImageVector)
 
 private val navItems = listOf(
     NavItem("home", "首页", Icons.Filled.Home),
@@ -66,15 +75,12 @@ fun PingPangAppRoot() {
         bottomBar = {
             NavigationBar {
                 navItems.forEach { item ->
-                    val selected = currentDestination?.hierarchy
-                        ?.any { it.route == item.route } == true
+                    val selected = currentDestination?.hierarchy?.any { it.route == item.route } == true
                     NavigationBarItem(
                         selected = selected,
                         onClick = {
                             navController.navigate(item.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
                             }
@@ -91,10 +97,127 @@ fun PingPangAppRoot() {
             startDestination = "home",
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable("home") { HomeScreen() }
-            composable("plan") { PlanScreen() }
-            composable("video") { VideoScreen() }
-            composable("mine") { MineScreen() }
+            composable("home") {
+                HomeScreen(
+                    onCheckin = { navController.navigate("checkin/-1") },
+                    onRecord = { navController.navigate("record") },
+                    onCompare = { navController.navigate("compare") },
+                    onHistory = { navController.navigate("history") },
+                    onOpenSession = { id -> navController.navigate("session_detail/$id") },
+                )
+            }
+            composable("plan") {
+                PlanScreen(
+                    onNew = { navController.navigate("plan_edit/-1") },
+                    onOpen = { id -> navController.navigate("plan_detail/$id") },
+                )
+            }
+            composable("video") {
+                VideoLibScreen(
+                    onOpenVideo = { id -> navController.navigate("video_detail/$id") },
+                    onRecord = { navController.navigate("record") },
+                    onCompare = { navController.navigate("compare") },
+                )
+            }
+            composable("mine") {
+                MineScreen(
+                    onOpenSettings = { navController.navigate("settings") },
+                )
+            }
+
+            composable(
+                "plan_edit/{stageId}",
+                arguments = listOf(navArgument("stageId") { type = NavType.LongType }),
+            ) { entry ->
+                PlanEditScreen(
+                    stageId = entry.arguments?.getLong("stageId") ?: -1,
+                    onDone = { navController.popBackStack() },
+                )
+            }
+            composable(
+                "plan_detail/{stageId}",
+                arguments = listOf(navArgument("stageId") { type = NavType.LongType }),
+            ) { entry ->
+                val stageId = entry.arguments?.getLong("stageId") ?: -1L
+                PlanDetailScreen(
+                    stageId = stageId,
+                    onEdit = { navController.navigate("plan_edit/$stageId") },
+                    onCheckin = { planId, content ->
+                        navController.navigate(
+                            "checkin/$planId?prefill=${Uri.encode(content)}"
+                        )
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                "checkin/{planId}?prefill={prefill}",
+                arguments = listOf(
+                    navArgument("planId") { type = NavType.LongType },
+                    navArgument("prefill") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                ),
+            ) { entry ->
+                CheckinScreen(
+                    planId = entry.arguments?.getLong("planId") ?: -1L,
+                    prefillContent = entry.arguments?.getString("prefill") ?: "",
+                    onDone = { navController.popBackStack() },
+                )
+            }
+            composable(
+                "session_detail/{sessionId}",
+                arguments = listOf(navArgument("sessionId") { type = NavType.LongType }),
+            ) { entry ->
+                SessionDetailScreen(
+                    sessionId = entry.arguments?.getLong("sessionId") ?: -1L,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("history") {
+                HistoryScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpen = { id -> navController.navigate("session_detail/$id") },
+                )
+            }
+            composable("record") {
+                RecordScreen(
+                    onBack = { navController.popBackStack() },
+                    onSaved = { navController.popBackStack() },
+                )
+            }
+            composable(
+                "video_detail/{videoId}",
+                arguments = listOf(navArgument("videoId") { type = NavType.LongType }),
+            ) { entry ->
+                VideoDetailScreen(
+                    videoId = entry.arguments?.getLong("videoId") ?: -1L,
+                    onBack = { navController.popBackStack() },
+                    onAddToCompare = { id ->
+                        navController.navigate("compare?ids=$id")
+                    },
+                )
+            }
+            composable(
+                "compare?ids={ids}",
+                arguments = listOf(navArgument("ids") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }),
+            ) { entry ->
+                val ids = (entry.arguments?.getString("ids") ?: "")
+                    .split(",")
+                    .mapNotNull { it.toLongOrNull() }
+                    .filter { it > 0 }
+                CompareScreen(
+                    initialIds = ids,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("settings") {
+                SettingsScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }

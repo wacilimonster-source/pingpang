@@ -23,6 +23,8 @@ data class WeekPlan(
     val stageId: Long,
     val weekNo: Int,
     val theme: String,
+    /** 该周训练课内容列表 JSON：[{"type":"多球","content":"..."}] */
+    val sessionsJson: String = "[]",
 )
 
 /** 单次训练课 / 训练记录 */
@@ -61,8 +63,8 @@ data class VideoClip(
     val date: String,           // yyyy-MM-dd
     val source: String,         // RECORDED / IMPORTED
     val tagsJson: String,       // 标签数组 JSON
-    val linkedType: String?,    // TRAINING / SKILL / MATCH
-    val linkedId: Long?,
+    val linkedType: String? = null,    // TRAINING / SKILL / MATCH
+    val linkedId: Long? = null,
     val durationMs: Long,
     val thumbPath: String?,     // 缩略图路径
 )

@@ -11,63 +11,86 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * AI 辅助：制定训练计划（MVP）。
- *
- * 使用 OpenAI 兼容协议（DeepSeek / 通义千问 / 智谱等均支持），
- * 用户在"我的 → AI 设置"中自配 baseUrl / apiKey / model。
- * 所有 AI 输出均为草稿，用户确认后才入库。
+ * AI 辅助：制定训练计划 / 训练复盘（F03 / F07）。
+ * OpenAI 兼容协议（DeepSeek / 通义千问 / 智谱），用户自配 baseUrl/apiKey/model。
+ * 所有输出为草稿，用户确认后才入库。
  */
 object AiPlanService {
 
     private val client = OkHttpClient()
 
     data class Config(
-        val baseUrl: String,   // 如 https://api.deepseek.com/v1/chat/completions
+        val baseUrl: String,
         val apiKey: String,
-        val model: String,     // 如 deepseek-chat
+        val model: String,
     )
 
-    /** 生成阶段计划草稿（结构化 JSON 文本），失败抛异常 */
+    /** 从本地偏好构造配置；未配置返回 null */
+    fun configOrNull(context: Context): Config? {
+        if (!AppPrefs.isAiConfigured(context)) return null
+        return Config(
+            baseUrl = AppPrefs.getAiBaseUrl(context),
+            apiKey = AppPrefs.getAiApiKey(context),
+            model = AppPrefs.getAiModel(context),
+        )
+    }
+
+    /** 生成阶段计划草稿（结构化 JSON），失败抛异常 */
     suspend fun generateStagePlan(
         config: Config,
         goal: String,
         weeklyTimes: Int,
-        types: String,         // 多球/单球/发接发 偏好
-        level: String,         // 水平描述
-    ): String = withContext(Dispatchers.IO) {
-        val system = """
-            你是一名专业乒乓球教练。请根据球员目标制定一份阶段训练计划。
-            输出必须是严格的 JSON，格式：
-            {"title":"计划标题","weeks":[{"week":1,"theme":"本周主题","sessions":[{"type":"多球|单球|发接发","content":"具体训练内容"}]}]}
-            只输出 JSON，不要其他文字。
-        """.trimIndent()
-        val user = "目标：$goal\n每周训练次数：$weeklyTimes\n训练类型偏好：$types\n当前水平：$level"
+        types: String,
+        level: String,
+    ): String = chat(config, systemPlanPrompt, "目标：$goal\n每周训练次数：$weeklyTimes\n训练类型偏好：$types\n当前水平：$level")
 
-        val body = JSONObject()
-            .put("model", config.model)
-            .put("messages", JSONArray()
-                .put(JSONObject().put("role", "system").put("content", system))
-                .put(JSONObject().put("role", "user").put("content", user)))
-            .put("temperature", 0.7)
-            .put("stream", false)
+    /** 训练复盘（F07），返回 Markdown 风格建议文本 */
+    suspend fun generateReview(
+        config: Config,
+        sessionInfo: String,
+    ): String = chat(config, systemReviewPrompt, "训练记录：\n$sessionInfo")
 
-        val request = Request.Builder()
-            .url(config.baseUrl)
-            .header("Authorization", "Bearer ${config.apiKey}")
-            .header("Content-Type", "application/json")
-            .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .build()
+    private val systemPlanPrompt = """
+        你是一名专业乒乓球教练。请根据球员目标制定一份阶段训练计划。
+        输出必须是严格的 JSON，不要输出其他文字或代码围栏。格式：
+        {"title":"计划标题","weeks":[{"week":1,"theme":"本周主题","sessions":[{"type":"多球","content":"具体训练内容"}]}]}
+        要求：总周数 4-12 周；每周训练次数不超过用户要求；每周至少 1 次训练；训练内容具体可执行。
+    """.trimIndent()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                error("AI 请求失败：HTTP ${response.code} ${response.body?.string()?.take(200)}")
+    private val systemReviewPrompt = """
+        你是一名专业乒乓球教练。请根据球员的本次训练记录给出复盘，包含三部分：
+        1. 训练质量评估（简短）
+        2. 发现的问题（结合记录中的问题与量化数据）
+        3. 下次训练建议（1-3 条，具体可执行）
+        用简洁的中文，Markdown 列表，200 字以内。
+    """.trimIndent()
+
+    private suspend fun chat(config: Config, system: String, user: String): String =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("model", config.model)
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", system))
+                    .put(JSONObject().put("role", "user").put("content", user)))
+                .put("temperature", 0.7)
+                .put("stream", false)
+
+            val request = Request.Builder()
+                .url(config.baseUrl)
+                .header("Authorization", "Bearer ${config.apiKey}")
+                .header("Content-Type", "application/json")
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    error("AI 请求失败：HTTP ${response.code}")
+                }
+                val json = JSONObject(response.body?.string() ?: error("空响应"))
+                json.getJSONArray("choices")
+                    .getJSONObject(0)
+                    .getJSONObject("message")
+                    .getString("content")
             }
-            val json = JSONObject(response.body?.string() ?: error("空响应"))
-            val content = json.getJSONArray("choices")
-                .getJSONObject(0)
-                .getJSONObject("message")
-                .getString("content")
-            content
         }
-    }
 }

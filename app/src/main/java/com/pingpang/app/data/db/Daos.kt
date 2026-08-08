@@ -19,25 +19,45 @@ interface StagePlanDao {
     @Insert suspend fun insert(plan: StagePlan): Long
     @Update suspend fun update(plan: StagePlan)
     @Delete suspend fun delete(plan: StagePlan)
+    @Query("SELECT * FROM stage_plan WHERE id = :id")
+    suspend fun getById(id: Long): StagePlan?
+    @Query("DELETE FROM stage_plan WHERE id = :id")
+    suspend fun deleteById(id: Long)
     @Query("SELECT * FROM stage_plan WHERE status != 'DONE' ORDER BY startDate DESC")
     fun observeActive(): Flow<List<StagePlan>>
+    @Query("SELECT * FROM stage_plan WHERE status = 'DONE' ORDER BY endDate DESC")
+    fun observeDone(): Flow<List<StagePlan>>
+    @Query("SELECT * FROM stage_plan WHERE id = :id")
+    fun observeById(id: Long): Flow<StagePlan?>
 }
 
 @Dao
 interface WeekPlanDao {
     @Insert suspend fun insert(plan: WeekPlan): Long
+    @Insert suspend fun insertAll(plans: List<WeekPlan>)
+    @Update suspend fun update(plan: WeekPlan)
     @Query("SELECT * FROM week_plan WHERE stageId = :stageId ORDER BY weekNo")
     suspend fun forStage(stageId: Long): List<WeekPlan>
+    @Query("SELECT * FROM week_plan WHERE stageId = :stageId ORDER BY weekNo")
+    fun observeForStage(stageId: Long): Flow<List<WeekPlan>>
+    @Query("DELETE FROM week_plan WHERE stageId = :stageId")
+    suspend fun deleteByStage(stageId: Long)
 }
 
 @Dao
 interface TrainingSessionDao {
     @Insert suspend fun insert(session: TrainingSession): Long
     @Update suspend fun update(session: TrainingSession)
+    @Query("SELECT * FROM training_session WHERE id = :id")
+    suspend fun getById(id: Long): TrainingSession?
     @Query("SELECT * FROM training_session ORDER BY date DESC")
     fun observeAll(): Flow<List<TrainingSession>>
     @Query("SELECT * FROM training_session WHERE date = :date ORDER BY id DESC")
     fun observeByDate(date: String): Flow<List<TrainingSession>>
+    @Query("SELECT * FROM training_session WHERE planId = :planId ORDER BY date DESC")
+    suspend fun forPlan(planId: Long): List<TrainingSession>
+    @Query("DELETE FROM training_session WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }
 
 @Dao
@@ -51,7 +71,10 @@ interface SkillCardDao {
 @Dao
 interface VideoClipDao {
     @Insert suspend fun insert(clip: VideoClip): Long
+    @Update suspend fun update(clip: VideoClip)
     @Delete suspend fun delete(clip: VideoClip)
+    @Query("SELECT * FROM video_clip WHERE id = :id")
+    suspend fun getById(id: Long): VideoClip?
     @Query("SELECT * FROM video_clip ORDER BY date DESC, id DESC")
     fun observeAll(): Flow<List<VideoClip>>
 }

@@ -3,6 +3,8 @@ package com.pingpang.app.update
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,8 +20,9 @@ import java.io.File
 object UpdateInstaller {
 
     private val client = OkHttpClient()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
-    /** 下载 APK 到缓存目录，返回文件；[onProgress] 回调 0-100 */
+    /** 下载 APK 到缓存目录，返回文件；[onProgress] 回调 0-100（主线程） */
     suspend fun downloadApk(
         context: Context,
         url: String,
@@ -52,7 +55,8 @@ object UpdateInstaller {
                         val p = ((read * 100) / total).toInt()
                         if (p != progress) {
                             progress = p
-                            onProgress(p)
+                            val value = p
+                            mainHandler.post { onProgress(value) }
                         }
                     }
                 }

@@ -6,7 +6,6 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.pingpang.app.data.db.StagePlanDao
 import com.pingpang.app.data.db.TrainingSessionDao
 import com.pingpang.app.data.db.VideoClipDao
-import com.pingpang.app.ui.home.HomeViewModel
 import com.pingpang.app.ui.plan.PlanViewModel
 import com.pingpang.app.ui.video.VideoViewModel
 
