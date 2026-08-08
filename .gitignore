@@ -1,0 +1,15 @@
+# 乒乓训练助手 · 版本控制忽略规则
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+app/build/
+*.apk
+*.aab
+!release.apk
