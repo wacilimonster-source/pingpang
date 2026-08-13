@@ -26,25 +26,36 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.background
 import androidx.core.content.ContextCompat
 import com.pingpang.app.PingPangApp
 import com.pingpang.app.data.VideoThumbnailer
 import com.pingpang.app.data.model.VideoClip
+import com.pingpang.app.util.MediaHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.Executors
+
+private val speeds = listOf(0.25f, 0.5f, 1f)
+
+/** 录制暂存用的固定执行器（进程级单例，避免每次录制泄漏一个线程） */
+private val recorderExecutor = Executors.newSingleThreadExecutor { r ->
+    Thread(r, "pingpang-recorder").apply { isDaemon = true }
+}
 
 /**
  * 视频录制（F08）：CameraX 全屏预览 + 录制/停止（CameraX 1.3 video API）。
@@ -62,6 +73,16 @@ fun RecordScreen(
     var recording by remember { mutableStateOf(false) }
     var outputPath by remember { mutableStateOf<String?>(null) }
     var cameraSelector by remember { mutableStateOf(CameraSelector.DEFAULT_BACK_CAMERA) }
+    var recordSeconds by remember { mutableIntStateOf(0) }
+
+    // 录制计时：每秒递增，展示在预览顶部
+    LaunchedEffect(recording) {
+        recordSeconds = 0
+        while (recording) {
+            kotlinx.coroutines.delay(1000)
+            recordSeconds++
+        }
+    }
 
     var granted by remember {
         mutableStateOf(
@@ -127,10 +148,16 @@ fun RecordScreen(
             return
         }
 
+        // 存储空间检查（PRD §4.4）：不足 200MB 禁止开始录制
+        if (!MediaHelper.ensureStorage(context, 200L * 1024 * 1024)) {
+            Toast.makeText(context, "存储空间不足，请清理后再录制", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val dir = File(context.filesDir, "videos").apply { mkdirs() }
         val file = File(dir, "rec_${System.currentTimeMillis()}.mp4")
         outputPath = file.absolutePath
-        val executor = Executors.newSingleThreadExecutor()
+        val executor = recorderExecutor
 
         ProcessCameraProvider.getInstance(context).addListener({
             val provider = ProcessCameraProvider.getInstance(context).get()
@@ -185,6 +212,21 @@ fun RecordScreen(
         AndroidView(
             factory = { previewView },
             modifier = Modifier.fillMaxSize(),
+        )
+        // 录制计时（PRD P-RECORD：顶部显示已录时长）
+        Text(
+            text = if (recording) {
+                val m = recordSeconds / 60
+                val s = recordSeconds % 60
+                "● ${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}"
+            } else "",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 24.dp)
+                .background(Color.Black.copy(alpha = 0.5f))
+                .padding(horizontal = 12.dp, vertical = 4.dp),
         )
         Column(
             Modifier.align(Alignment.BottomCenter).padding(24.dp),

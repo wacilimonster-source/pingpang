@@ -61,11 +61,7 @@ fun HistoryScreen(
                     Column(Modifier.weight(1f)) {
                         Text("${TrainingTemplates.typeLabel(s.type)} · ${s.content}", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "${s.date} · " + when (s.completed) {
-                                "DONE" -> "已完成"
-                                "PARTIAL" -> "部分完成"
-                                else -> "未完成"
-                            },
+                            "${s.date} · " + TrainingTemplates.completedLabel(s.completed),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }

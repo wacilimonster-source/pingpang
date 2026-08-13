@@ -37,4 +37,12 @@ object TrainingTemplates {
         "SERVE_RECEIVE" -> "发接发"
         else -> type
     }
+
+    /** 训练完成状态文案（统一映射，避免各处重复硬编码） */
+    fun completedLabel(completed: String): String = when (completed) {
+        "DONE" -> "已完成"
+        "PARTIAL" -> "部分完成"
+        "SKIPPED" -> "跳过"
+        else -> "未完成"
+    }
 }

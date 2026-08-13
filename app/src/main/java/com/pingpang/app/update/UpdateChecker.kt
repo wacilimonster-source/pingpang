@@ -27,7 +27,11 @@ object UpdateChecker {
     val VERSION_TXT_URL: String
         get() = "https://raw.githubusercontent.com/$GITHUB_REPO/$GITHUB_BRANCH/version.txt"
 
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
     data class VersionInfo(
         val versionCode: Int,

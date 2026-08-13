@@ -7,8 +7,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
@@ -60,7 +60,7 @@ private data class NavItem(val route: String, val label: String, val icon: Image
 
 private val navItems = listOf(
     NavItem("home", "首页", Icons.Filled.Home),
-    NavItem("plan", "计划", Icons.Filled.ListAlt),
+    NavItem("plan", "计划", Icons.AutoMirrored.Filled.ListAlt),
     NavItem("video", "视频", Icons.Filled.VideoLibrary),
     NavItem("mine", "我的", Icons.Filled.Person),
 )
@@ -103,7 +103,6 @@ fun PingPangAppRoot() {
                     onRecord = { navController.navigate("record") },
                     onCompare = { navController.navigate("compare") },
                     onHistory = { navController.navigate("history") },
-                    onOpenSession = { id -> navController.navigate("session_detail/$id") },
                 )
             }
             composable("plan") {
@@ -151,18 +150,23 @@ fun PingPangAppRoot() {
                 )
             }
             composable(
-                "checkin/{planId}?prefill={prefill}",
+                "checkin/{planId}?prefill={prefill}&sessionId={sessionId}",
                 arguments = listOf(
                     navArgument("planId") { type = NavType.LongType },
                     navArgument("prefill") {
                         type = NavType.StringType
                         defaultValue = ""
                     },
+                    navArgument("sessionId") {
+                        type = NavType.LongType
+                        defaultValue = -1L
+                    },
                 ),
             ) { entry ->
                 CheckinScreen(
                     planId = entry.arguments?.getLong("planId") ?: -1L,
                     prefillContent = entry.arguments?.getString("prefill") ?: "",
+                    editSessionId = entry.arguments?.getLong("sessionId") ?: -1L,
                     onDone = { navController.popBackStack() },
                 )
             }
@@ -173,6 +177,9 @@ fun PingPangAppRoot() {
                 SessionDetailScreen(
                     sessionId = entry.arguments?.getLong("sessionId") ?: -1L,
                     onBack = { navController.popBackStack() },
+                    onEdit = { id ->
+                        navController.navigate("checkin/0?sessionId=$id")
+                    },
                 )
             }
             composable("history") {

@@ -6,6 +6,8 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import com.pingpang.app.data.db.StagePlanDao
 import com.pingpang.app.data.db.TrainingSessionDao
 import com.pingpang.app.data.db.VideoClipDao
+import com.pingpang.app.data.db.WeekPlanDao
+import com.pingpang.app.ui.home.DashboardViewModel
 import com.pingpang.app.ui.plan.PlanViewModel
 import com.pingpang.app.ui.video.VideoViewModel
 
@@ -14,6 +16,7 @@ class PingPangViewModelFactory(
     private val trainingDao: TrainingSessionDao? = null,
     private val stagePlanDao: StagePlanDao? = null,
     private val videoClipDao: VideoClipDao? = null,
+    private val weekPlanDao: WeekPlanDao? = null,
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -25,6 +28,10 @@ class PingPangViewModelFactory(
                 PlanViewModel(stagePlanDao) as T
             modelClass.isAssignableFrom(VideoViewModel::class.java) && videoClipDao != null ->
                 VideoViewModel(videoClipDao) as T
+            modelClass.isAssignableFrom(DashboardViewModel::class.java) &&
+                trainingDao != null && stagePlanDao != null &&
+                videoClipDao != null && weekPlanDao != null ->
+                DashboardViewModel(stagePlanDao, trainingDao, weekPlanDao, videoClipDao) as T
             else -> error("未知 ViewModel: ${modelClass.name}")
         }
 }

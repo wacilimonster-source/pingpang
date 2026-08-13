@@ -16,10 +16,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -33,14 +37,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -52,6 +58,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.math.abs
 
 private val speeds = listOf(0.25f, 0.5f, 1f)
 
@@ -65,7 +72,6 @@ fun CompareScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val db = (context.applicationContext as PingPangApp).database
     val dao = db.videoClipDao()
     val vm: VideoViewModel = viewModel(factory = PingPangViewModelFactory(videoClipDao = dao))
@@ -78,37 +84,56 @@ fun CompareScreen(
 
     val clips = selectedIds.mapNotNull { id -> allClips.find { it.id == id } }
 
-    // 每路播放器（随选中视频变化重建）
-    val players = remember(selectedIds) {
-        selectedIds.map { id ->
+    // 每路播放器实例：选中集变化时重建并释放旧实例；媒体数据异步到达后再绑定，避免时序 bug
+    var players by remember { mutableStateOf(emptyList<ExoPlayer>()) }
+    LaunchedEffect(selectedIds) {
+        players.forEach { it.release() }
+        players = selectedIds.map { ExoPlayer.Builder(context).build() }
+    }
+    LaunchedEffect(players) {
+        players.forEachIndexed { i, p ->
+            val id = selectedIds.getOrNull(i) ?: return@forEachIndexed
             val path = allClips.find { it.id == id }?.filePath
-            ExoPlayer.Builder(context).build().also { p ->
-                if (path != null) {
-                    p.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(path))))
-                    p.prepare()
-                    p.playWhenReady = true
-                }
+            if (path != null && p.currentMediaItem == null) {
+                p.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(path))))
+                p.prepare()
             }
         }
     }
 
+    // 绑定 Activity Lifecycle：后台暂停、前台恢复（不随页面重建释放）
+    val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(Unit) {
-        onDispose { players.forEach { it.release() } }
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> players.forEach { it.pause() }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            players.forEach { it.release() }
+        }
     }
 
-    // 同步播放：以第 1 路为基准轮询同步
+    // 同步播放：以第 1 路为基准，仅当偏差过大时对齐（避免频繁 seekTo 抖动）
     LaunchedEffect(syncEnabled, players) {
+        if (!syncEnabled || players.size <= 1) return@LaunchedEffect
         while (isActive) {
-            if (syncEnabled && players.isNotEmpty()) {
-                val master = players[0]
+            val master = players[0]
+            if (master.isPlaying && master.duration > 0) {
                 val pos = master.currentPosition
-                players.forEachIndexed { i, p ->
-                    if (i > 0 && p.isPlaying && kotlin.math.abs(p.currentPosition - pos) > 300) {
-                        p.seekTo(pos)
+                players.drop(1).forEach { p ->
+                    if (abs(p.currentPosition - pos) > 500) {
+                        p.seekTo(pos.coerceIn(0, master.duration.coerceAtLeast(pos)))
                     }
+                    if (!p.isPlaying) p.play()
                 }
+            } else if (!master.isPlaying) {
+                players.drop(1).forEach { p -> if (p.isPlaying) p.pause() }
             }
-            delay(200)
+            delay(250)
         }
     }
 
@@ -158,20 +183,44 @@ fun CompareScreen(
                 }
             }
             clips.size == 1 -> {
-                ComparePane(clips[0], players[0], playerViews, 0, Modifier.fillMaxWidth().weight(1f))
+                ComparePane(
+                    clips[0], players.getOrNull(0), playerViews, 0,
+                    onRemove = { selectedIds = selectedIds - clips[0].id },
+                    Modifier.fillMaxWidth().weight(1f),
+                )
             }
             clips.size == 2 -> {
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ComparePane(clips[0], players[0], playerViews, 0, Modifier.weight(1f).fillMaxSize())
-                    ComparePane(clips[1], players[1], playerViews, 1, Modifier.weight(1f).fillMaxSize())
+                    ComparePane(
+                        clips[0], players.getOrNull(0), playerViews, 0,
+                        onRemove = { selectedIds = selectedIds - clips[0].id },
+                        Modifier.weight(1f).fillMaxSize(),
+                    )
+                    ComparePane(
+                        clips[1], players.getOrNull(1), playerViews, 1,
+                        onRemove = { selectedIds = selectedIds - clips[1].id },
+                        Modifier.weight(1f).fillMaxSize(),
+                    )
                 }
             }
             else -> {
                 Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ComparePane(clips[0], players[0], playerViews, 0, Modifier.fillMaxWidth().weight(1f))
+                    ComparePane(
+                        clips[0], players.getOrNull(0), playerViews, 0,
+                        onRemove = { selectedIds = selectedIds - clips[0].id },
+                        Modifier.fillMaxWidth().weight(1f),
+                    )
                     Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ComparePane(clips[1], players[1], playerViews, 1, Modifier.weight(1f).fillMaxSize())
-                        ComparePane(clips[2], players[2], playerViews, 2, Modifier.weight(1f).fillMaxSize())
+                        ComparePane(
+                            clips[1], players.getOrNull(1), playerViews, 1,
+                            onRemove = { selectedIds = selectedIds - clips[1].id },
+                            Modifier.weight(1f).fillMaxSize(),
+                        )
+                        ComparePane(
+                            clips[2], players.getOrNull(2), playerViews, 2,
+                            onRemove = { selectedIds = selectedIds - clips[2].id },
+                            Modifier.weight(1f).fillMaxSize(),
+                        )
                     }
                 }
             }
@@ -210,13 +259,14 @@ fun CompareScreen(
     }
 }
 
-/** 一路视频面板：播放器 + 独立缩放平移 */
+/** 一路视频面板：播放器 + 独立缩放平移；顶部可移除该路视频 */
 @Composable
 private fun ComparePane(
     clip: VideoClip,
-    player: ExoPlayer,
+    player: ExoPlayer?,
     views: MutableMap<Int, PlayerView>,
     index: Int,
+    onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
@@ -249,11 +299,15 @@ private fun ComparePane(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
-            Text(
-                clip.date,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
-            )
+            Row(
+                Modifier.align(Alignment.TopStart).padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(clip.date, style = MaterialTheme.typography.labelSmall)
+                IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Filled.Close, contentDescription = "移除该视频", modifier = Modifier.size(16.dp))
+                }
+            }
         }
     }
 }

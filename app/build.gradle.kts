@@ -14,13 +14,17 @@ android {
         minSdk = 26
         targetSdk = 34
         // 发布新版本时同步修改；version.txt 的 versionCode 必须 >= 此值（判更新唯一依据）
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.01"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // 发布版使用 debug 签名，方便用户直接安装测试（正式上架再换正式 keystore）
+            signingConfig = signingConfigs.getByName("debug")
+            // R8 代码裁剪 + 资源裁剪：material-icons-extended 全量图标自动收缩，体积可减半
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -84,4 +88,8 @@ dependencies {
     implementation(libs.camerax.video)
 
     debugImplementation(libs.androidx.ui.tooling)
+
+    // JVM 单元测试（数据工具层）
+    testImplementation(libs.junit4)
+    testImplementation(libs.json)
 }

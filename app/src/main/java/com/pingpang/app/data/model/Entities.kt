@@ -1,6 +1,7 @@
 package com.pingpang.app.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /** 阶段计划（如"三个月练好反手拧拉"） */
@@ -17,7 +18,7 @@ data class StagePlan(
 )
 
 /** 周计划：隶属于某个阶段计划 */
-@Entity(tableName = "week_plan")
+@Entity(tableName = "week_plan", indices = [Index(value = ["stageId"])])
 data class WeekPlan(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val stageId: Long,
@@ -28,7 +29,10 @@ data class WeekPlan(
 )
 
 /** 单次训练课 / 训练记录 */
-@Entity(tableName = "training_session")
+@Entity(
+    tableName = "training_session",
+    indices = [Index(value = ["date"]), Index(value = ["planId"])],
+)
 data class TrainingSession(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val planId: Long?,          // 关联周计划，可空（临时训练）
@@ -41,6 +45,7 @@ data class TrainingSession(
     val notes: String,          // 问题与收获
     val photosJson: String,     // 照片路径数组 JSON
     val videosJson: String,     // 关联视频 id 数组 JSON
+    val aiReviewJson: String = "",   // 最近一次 AI 复盘草稿 {"content","generatedAt"}（PRD §8.1）
 )
 
 /** 技术档案卡 */
@@ -56,7 +61,7 @@ data class SkillCard(
 )
 
 /** 视频片段 */
-@Entity(tableName = "video_clip")
+@Entity(tableName = "video_clip", indices = [Index(value = ["date"])])
 data class VideoClip(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val filePath: String,       // 应用私有目录内绝对路径

@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,30 @@ fun MineScreen(
     var state by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
     var backupProgress by remember { mutableStateOf<String?>(null) }
 
+    fun checkUpdate() {
+        if (state is UpdateState.Checking || state is UpdateState.Downloading || state is UpdateState.Installing) return
+        state = UpdateState.Checking
+        AppPrefs.setLastCheckTime(context, System.currentTimeMillis())
+        scope.launch {
+            val info = UpdateChecker.fetchVersion()
+            if (info == null) {
+                state = UpdateState.Failed("网络错误或版本信息不存在")
+            } else if (UpdateChecker.hasNewVersion(info, BuildConfig.VERSION_CODE)) {
+                state = UpdateState.Available(info)
+            } else {
+                state = UpdateState.UpToDate
+            }
+        }
+    }
+
+    // 启动自动检查（PRD §10.2）：24h 内最多 1 次，失败静默
+    LaunchedEffect(Unit) {
+        val last = AppPrefs.lastCheckTime(context)
+        if (state == UpdateState.Idle && System.currentTimeMillis() - last > 24 * 60 * 60 * 1000L) {
+            checkUpdate()
+        }
+    }
+
     // 备份：SAF 选择保存位置
     val backupLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip")
@@ -74,7 +99,13 @@ fun MineScreen(
             backupProgress = "正在打包…"
             scope.launch {
                 try {
-                    val count = BackupManager.export(context, uri)
+                    val count = BackupManager.export(
+                        context,
+                        uri,
+                        onProgress = { done, t -> backupProgress = "正在打包… $done/$t" },
+                        versionName = BuildConfig.VERSION_NAME,
+                        versionCode = BuildConfig.VERSION_CODE,
+                    )
                     backupProgress = null
                     Toast.makeText(context, "备份完成（$count 个文件）", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
@@ -120,19 +151,7 @@ fun MineScreen(
                 }
 
                 Button(
-                    onClick = {
-                        state = UpdateState.Checking
-                        scope.launch {
-                            val info = UpdateChecker.fetchVersion()
-                            if (info == null) {
-                                state = UpdateState.Failed("网络错误或版本信息不存在")
-                            } else if (UpdateChecker.hasNewVersion(info, BuildConfig.VERSION_CODE)) {
-                                state = UpdateState.Available(info)
-                            } else {
-                                state = UpdateState.UpToDate
-                            }
-                        }
-                    },
+                    onClick = { checkUpdate() },
                     enabled = state !is UpdateState.Checking &&
                         state !is UpdateState.Downloading &&
                         state !is UpdateState.Installing,

@@ -50,14 +50,42 @@ interface TrainingSessionDao {
     @Update suspend fun update(session: TrainingSession)
     @Query("SELECT * FROM training_session WHERE id = :id")
     suspend fun getById(id: Long): TrainingSession?
+    @Query("SELECT * FROM training_session WHERE id = :id")
+    fun observeById(id: Long): Flow<TrainingSession?>
     @Query("SELECT * FROM training_session ORDER BY date DESC")
     fun observeAll(): Flow<List<TrainingSession>>
     @Query("SELECT * FROM training_session WHERE date = :date ORDER BY id DESC")
     fun observeByDate(date: String): Flow<List<TrainingSession>>
     @Query("SELECT * FROM training_session WHERE planId = :planId ORDER BY date DESC")
     suspend fun forPlan(planId: Long): List<TrainingSession>
+    @Query("SELECT COUNT(*) FROM training_session WHERE planId = :planId")
+    suspend fun countFor(planId: Long): Int
+    @Query("SELECT * FROM training_session")
+    suspend fun all(): List<TrainingSession>
     @Query("DELETE FROM training_session WHERE id = :id")
     suspend fun deleteById(id: Long)
+    @Query("DELETE FROM training_session WHERE planId = :planId")
+    suspend fun deleteByPlan(planId: Long)
+
+    // ---------- 看板聚合查询 ----------
+    data class MonthStat(val cnt: Int, val mins: Int)
+    @Query("SELECT COUNT(*) AS cnt, COALESCE(SUM(durationMin),0) AS mins FROM training_session WHERE date >= :startDate")
+    fun observeSinceDate(startDate: String): Flow<MonthStat>
+
+    data class DateMinutes(val date: String, val mins: Int)
+    @Query("SELECT date, SUM(durationMin) AS mins FROM training_session WHERE date >= :startDate GROUP BY date")
+    fun observeDateMinutes(startDate: String): Flow<List<DateMinutes>>
+
+    data class TypeCount(val type: String, val cnt: Int)
+    @Query("SELECT type, COUNT(*) AS cnt FROM training_session GROUP BY type")
+    fun observeTypeCounts(): Flow<List<TypeCount>>
+
+    data class CompletionStat(val done: Int, val partial: Int, val skipped: Int)
+    @Query("SELECT SUM(CASE WHEN completed='DONE' THEN 1 ELSE 0 END) AS done, SUM(CASE WHEN completed='PARTIAL' THEN 1 ELSE 0 END) AS partial, SUM(CASE WHEN completed='SKIPPED' THEN 1 ELSE 0 END) AS skipped FROM training_session WHERE date >= :startDate")
+    fun observeCompletion(startDate: String): Flow<CompletionStat>
+
+    @Query("SELECT DISTINCT date FROM training_session ORDER BY date DESC")
+    fun observeDistinctDates(): Flow<List<String>>
 }
 
 @Dao
@@ -75,8 +103,12 @@ interface VideoClipDao {
     @Delete suspend fun delete(clip: VideoClip)
     @Query("SELECT * FROM video_clip WHERE id = :id")
     suspend fun getById(id: Long): VideoClip?
+    @Query("SELECT * FROM video_clip WHERE id = :id")
+    fun observeById(id: Long): Flow<VideoClip?>
     @Query("SELECT * FROM video_clip ORDER BY date DESC, id DESC")
     fun observeAll(): Flow<List<VideoClip>>
+    @Query("SELECT * FROM video_clip")
+    suspend fun all(): List<VideoClip>
 }
 
 @Dao

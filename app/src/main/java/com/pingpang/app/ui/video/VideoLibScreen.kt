@@ -17,8 +17,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -38,7 +40,10 @@ import com.pingpang.app.data.model.VideoClip
 import com.pingpang.app.ui.common.PingPangViewModelFactory
 import com.pingpang.app.util.LocalImage
 import com.pingpang.app.util.MediaHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * 视频库（F08）：网格展示、相册导入、录制入口、比对入口。
@@ -58,6 +63,24 @@ fun VideoLibScreen(
     val vm: VideoViewModel = viewModel(factory = PingPangViewModelFactory(videoClipDao = dao))
     val clips by vm.clips.collectAsState(initial = emptyList())
     var importing by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var tagFilter by remember { mutableStateOf<String?>(null) }
+
+    // 标签聚合（来自 videosJson），用于筛选
+    val allTags = remember(clips) {
+        clips.flatMap { com.pingpang.app.data.JsonUtils.stringToList(it.tagsJson) }
+            .distinct().sorted()
+    }
+    // 搜索：文件名、日期、来源、时长秒
+    val visibleClips = remember(clips, query, tagFilter) {
+        clips.filter { c ->
+            (tagFilter == null || tagFilter in com.pingpang.app.data.JsonUtils.stringToList(c.tagsJson)) &&
+                (query.isBlank() ||
+                    query in c.date ||
+                    query in (c.durationMs / 1000).toString() ||
+                    query in if (c.source == "RECORDED") "录制" else "导入")
+        }
+    }
 
     val importer = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
@@ -66,28 +89,52 @@ fun VideoLibScreen(
         importing = true
         scope.launch {
             try {
-                uris.forEach { uri ->
-                    val path = MediaHelper.copyToInternal(context, uri, "videos") ?: return@forEach
-                    val duration = try {
-                        val r = MediaMetadataRetriever()
-                        r.setDataSource(path)
-                        val d = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-                        r.release()
-                        d
-                    } catch (e: Exception) { 0L }
-                    val thumb = VideoThumbnailer.generate(context, path)
-                    dao.insert(
-                        VideoClip(
-                            filePath = path,
-                            date = java.time.LocalDate.now().toString(),
-                            source = "IMPORTED",
-                            tagsJson = "[]",
-                            durationMs = duration,
-                            thumbPath = thumb,
+                withContext(Dispatchers.IO) {
+                    // 存储空间检查（PRD §4.4）：不足则中止导入
+                    if (!MediaHelper.ensureStorage(context, 100L * 1024 * 1024)) {
+                        throw IllegalStateException("存储空间不足，请清理后再导入")
+                    }
+                    // 重复导入检测：同名文件且大小一致视为重复，自动跳过
+                    val existing = dao.all()
+                    var skipped = 0
+                    uris.forEach { uri ->
+                        val path = MediaHelper.copyToInternal(context, uri, "videos") ?: return@forEach
+                        val isDuplicate = existing.any { e ->
+                            MediaHelper.copiedName(e.filePath) == MediaHelper.copiedName(path) &&
+                                File(e.filePath).length() == File(path).length()
+                        }
+                        if (isDuplicate) {
+                            File(path).delete()
+                            skipped++
+                            return@forEach
+                        }
+                        val duration = try {
+                            val r = MediaMetadataRetriever()
+                            r.setDataSource(path)
+                            val d = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                            r.release()
+                            d
+                        } catch (e: Exception) { 0L }
+                        val thumb = VideoThumbnailer.generate(context, path)
+                        dao.insert(
+                            VideoClip(
+                                filePath = path,
+                                date = java.time.LocalDate.now().toString(),
+                                source = "IMPORTED",
+                                tagsJson = "[]",
+                                durationMs = duration,
+                                thumbPath = thumb,
+                            )
                         )
-                    )
+                    }
+                    skipped
+                }.let { skip ->
+                    if (skip > 0) {
+                        Toast.makeText(context, "导入完成（跳过 $skip 个重复）", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "导入完成", Toast.LENGTH_SHORT).show()
+                    }
                 }
-                Toast.makeText(context, "导入完成", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Toast.makeText(context, "导入失败：${e.message}", Toast.LENGTH_SHORT).show()
             } finally {
@@ -108,11 +155,39 @@ fun VideoLibScreen(
             OutlinedButton(onClick = onRecord, modifier = Modifier.weight(1f)) { Text("录制视频") }
         }
 
+        // 搜索 + 标签筛选（PRD F08：关键词搜索 + 标签筛选）
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("搜索：日期 / 来源 / 时长") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (allTags.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = tagFilter == null,
+                    onClick = { tagFilter = null },
+                    label = { Text("全部") },
+                )
+                allTags.forEach { tag ->
+                    FilterChip(selected = tagFilter == tag, onClick = { tagFilter = tag }, label = { Text(tag) })
+                }
+            }
+        }
+
         if (clips.isEmpty()) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("视频库为空")
                     Text("导入训练/教学视频后，可慢放回放并与他人动作并排比对", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        } else if (visibleClips.isEmpty()) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("没有匹配的视频")
+                    Text("换个关键词或清除筛选条件试试", style = MaterialTheme.typography.bodySmall)
                 }
             }
         } else {
@@ -121,7 +196,7 @@ fun VideoLibScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(clips, key = { it.id }) { clip: VideoClip ->
+                items(visibleClips, key = { it.id }) { clip: VideoClip ->
                     Card(
                         onClick = { onOpenVideo(clip.id) },
                         modifier = Modifier.aspectRatio(1f),

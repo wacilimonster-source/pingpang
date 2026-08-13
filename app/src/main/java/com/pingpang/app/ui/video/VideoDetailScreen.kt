@@ -18,6 +18,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,12 +26,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.pingpang.app.PingPangApp
+import com.pingpang.app.data.DataCleaner
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -49,14 +54,15 @@ fun VideoDetailScreen(
     val scope = rememberCoroutineScope()
     val db = (context.applicationContext as PingPangApp).database
 
-    var clip by remember { mutableStateOf<com.pingpang.app.data.model.VideoClip?>(null) }
     var speed by remember { mutableStateOf(1f) }
     var confirmDelete by remember { mutableStateOf(false) }
 
+    // Flow 响应式：外部修改（如比对添加）后自动刷新
+    val clip by db.videoClipDao().observeById(videoId).collectAsState(initial = null)
+
     val player = remember { ExoPlayer.Builder(context).build() }
 
-    LaunchedEffect(videoId) {
-        clip = db.videoClipDao().getById(videoId)
+    LaunchedEffect(clip) {
         clip?.let {
             player.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(it.filePath))))
             player.prepare()
@@ -64,8 +70,20 @@ fun VideoDetailScreen(
         }
     }
 
+    // 绑定 Activity Lifecycle：退后台暂停/回前台恢复，防止后台持续播放耗电
+    val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(Unit) {
-        onDispose { player.release() }
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> if (player.isPlaying) player.pause()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            player.release()
+        }
     }
 
     val c = clip
@@ -129,6 +147,8 @@ fun VideoDetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
+                        // PRD §8.2：先移除各训练记录中的引用，再删数据库记录并清理文件
+                        DataCleaner.removeVideoRefs(db, videoId)
                         db.videoClipDao().delete(c)
                         File(c.filePath).delete()
                         c.thumbPath?.let { File(it).delete() }

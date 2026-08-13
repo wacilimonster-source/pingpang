@@ -2,6 +2,7 @@ package com.pingpang.app.util
 
 import android.content.Context
 import android.net.Uri
+import android.os.StatFs
 import android.provider.OpenableColumns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -9,6 +10,15 @@ import java.io.File
 
 /** 媒体文件复制：相册/系统选择器 URI → 应用私有目录 */
 object MediaHelper {
+
+    /** 判断应用私有目录剩余空间是否足够（PRD §4.4 存储检查） */
+    fun ensureStorage(context: Context, minBytes: Long): Boolean {
+        return try {
+            StatFs(context.filesDir.absolutePath).availableBytes >= minBytes
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     /** 复制 uri 到私有目录子目录，返回新文件绝对路径 */
     suspend fun copyToInternal(
@@ -29,6 +39,10 @@ object MediaHelper {
             null
         }
     }
+
+    /** 复制的目标文件名（去掉时间戳前缀部分），用于重复导入检测 */
+    fun copiedName(path: String): String =
+        File(path).name.substringAfter("_", File(path).name)
 
     private fun queryName(context: Context, uri: Uri): String? {
         return try {

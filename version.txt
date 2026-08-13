@@ -1,6 +1,6 @@
 {
-  "versionCode": 1,
-  "versionName": "0.1.0",
-  "updateMessage": "乒乓训练助手首个测试版：训练计划（含 AI 生成）、训练打卡记录、视频库与多视频比对工作台、GitHub 检查更新、数据备份。",
-  "apkDownloadUrl": "https://raw.githubusercontent.com/wacilimonster-source/pingpang/main/0.1.0/pingpang_v0.1.0.apk"
+  "versionCode": 2,
+  "versionName": "0.01",
+  "updateMessage": "v0.01：训练看板首页（本月统计/阶段进度/14天热力图/类型分布/待办提醒）、计划页快速打卡面板与训练课状态徽标、打卡记录可编辑、检查更新与备份。",
+  "apkDownloadUrl": "https://raw.githubusercontent.com/wacilimonster-source/pingpang/main/0.01/pingpang_v0.01.apk"
 }

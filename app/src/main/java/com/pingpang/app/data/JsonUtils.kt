@@ -79,4 +79,22 @@ object JsonUtils {
             emptyList()
         }
     }
+
+    /** AI 复盘草稿序列化（PRD §8.1 持久化） */
+    fun aiReviewToJson(content: String, generatedAt: Long = System.currentTimeMillis()): String {
+        val obj = org.json.JSONObject()
+        obj.put("content", content)
+        obj.put("generatedAt", generatedAt)
+        return obj.toString()
+    }
+
+    /** 解析 AI 复盘草稿正文，无草稿返回 null */
+    fun aiReviewContent(json: String?): String? {
+        if (json.isNullOrBlank()) return null
+        return try {
+            org.json.JSONObject(json).optString("content").takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            null
+        }
+    }
 }

@@ -83,11 +83,22 @@ fun PlanEditScreen(
         }
     }
 
-    fun save(plan: StagePlan, weeks: List<WeekPlan>) {
+    /**
+     * 保存：编辑时保留既有周计划内容（数量变化时增删）；
+     * [replaceWeeks] = true 表示 AI 确认启用，用生成内容整体替换。
+     */
+    fun save(plan: StagePlan, weeks: List<WeekPlan>, replaceWeeks: Boolean = false) {
         scope.launch {
             if (stageId > 0) {
                 db.stagePlanDao().update(plan)
+                val existing = if (replaceWeeks) emptyList() else db.weekPlanDao().forStage(stageId)
                 db.weekPlanDao().deleteByStage(stageId)
+                val merged = (1..plan.weeklyTimes).map { weekNo ->
+                    existing.find { it.weekNo == weekNo }?.copy(stageId = stageId)
+                        ?: weeks.find { it.weekNo == weekNo }?.copy(stageId = stageId)
+                        ?: WeekPlan(stageId = stageId, weekNo = weekNo, theme = "第 $weekNo 周")
+                }
+                db.weekPlanDao().insertAll(merged)
             } else {
                 val id = db.stagePlanDao().insert(plan)
                 weeks.forEach { w ->
@@ -291,7 +302,7 @@ fun PlanEditScreen(
                             sessionsJson = arr.toString(),
                         )
                     }
-                    save(stage, weeks)
+                    save(stage, weeks, replaceWeeks = true)
                     aiPlan = null
                 }) { Text("确认启用") }
             },
