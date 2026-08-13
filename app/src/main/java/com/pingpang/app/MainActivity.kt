@@ -32,12 +32,15 @@ import androidx.navigation.navArgument
 import com.pingpang.app.ui.home.HomeScreen
 import com.pingpang.app.ui.mine.MineScreen
 import com.pingpang.app.ui.mine.SettingsScreen
+import com.pingpang.app.ui.opponent.OpponentDetailScreen
+import com.pingpang.app.ui.opponent.OpponentListScreen
 import com.pingpang.app.ui.plan.CheckinScreen
 import com.pingpang.app.ui.plan.HistoryScreen
 import com.pingpang.app.ui.plan.PlanDetailScreen
 import com.pingpang.app.ui.plan.PlanEditScreen
 import com.pingpang.app.ui.plan.PlanScreen
 import com.pingpang.app.ui.plan.SessionDetailScreen
+import com.pingpang.app.ui.skill.SkillListScreen
 import com.pingpang.app.ui.theme.PingPangTheme
 import com.pingpang.app.ui.video.CompareScreen
 import com.pingpang.app.ui.video.RecordScreen
@@ -121,6 +124,8 @@ fun PingPangAppRoot() {
             composable("mine") {
                 MineScreen(
                     onOpenSettings = { navController.navigate("settings") },
+                    onOpenSkills = { navController.navigate("skills") },
+                    onOpenOpponents = { navController.navigate("opponents") },
                 )
             }
 
@@ -224,6 +229,24 @@ fun PingPangAppRoot() {
             }
             composable("settings") {
                 SettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable("skills") {
+                SkillListScreen(onBack = { navController.popBackStack() })
+            }
+            composable("opponents") {
+                OpponentListScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpen = { id -> navController.navigate("opponent_detail/$id") },
+                )
+            }
+            composable(
+                "opponent_detail/{opponentId}",
+                arguments = listOf(navArgument("opponentId") { type = NavType.LongType }),
+            ) { entry ->
+                OpponentDetailScreen(
+                    opponentId = entry.arguments?.getLong("opponentId") ?: -1L,
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
     }

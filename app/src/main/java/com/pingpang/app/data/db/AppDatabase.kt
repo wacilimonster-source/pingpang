@@ -8,6 +8,8 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.pingpang.app.data.model.MatchRecord
+import com.pingpang.app.data.model.MySkill
+import com.pingpang.app.data.model.Opponent
 import com.pingpang.app.data.model.OpponentType
 import com.pingpang.app.data.model.SkillCard
 import com.pingpang.app.data.model.StagePlan
@@ -30,6 +32,29 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/** v2→v3：新增「我的技术特长」与「对手档案」表（含特长与执行反馈） */
+private val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS my_skill (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "name TEXT NOT NULL, " +
+                "description TEXT NOT NULL, " +
+                "updatedAt INTEGER NOT NULL)"
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS opponent (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "name TEXT NOT NULL, " +
+                "skillsJson TEXT NOT NULL, " +
+                "notes TEXT NOT NULL, " +
+                "feedbackJson TEXT NOT NULL, " +
+                "createdAt INTEGER NOT NULL, " +
+                "updatedAt INTEGER NOT NULL)"
+        )
+    }
+}
+
 @Database(
     entities = [
         StagePlan::class,
@@ -39,8 +64,10 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
         VideoClip::class,
         MatchRecord::class,
         OpponentType::class,
+        MySkill::class,
+        Opponent::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -51,6 +78,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun videoClipDao(): VideoClipDao
     abstract fun matchRecordDao(): MatchRecordDao
     abstract fun opponentTypeDao(): OpponentTypeDao
+    abstract fun mySkillDao(): MySkillDao
+    abstract fun opponentDao(): OpponentDao
 
     companion object {
         @Volatile
@@ -65,7 +94,7 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase::class.java,
                         "pingpang.db",
                     )
-                        .addMigrations(MIGRATION_1_2)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                         .build()
                         .also { instance = it }
                 }

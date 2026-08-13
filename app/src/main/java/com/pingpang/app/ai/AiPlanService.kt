@@ -50,6 +50,42 @@ object AiPlanService {
         sessionInfo: String,
     ): String = chat(config, systemReviewPrompt, "训练记录：\n$sessionInfo")
 
+    /**
+     * 对战应对建议：结合自己的技术特长、对手技术特长与历史执行反馈，
+     * 输出针对性战术建议（Markdown）。
+     */
+    suspend fun generateTactics(
+        config: Config,
+        mySkills: List<Pair<String, String>>,
+        opponentName: String,
+        opponentSkills: List<Pair<String, String>>,
+        opponentNotes: String,
+        feedbacks: List<Pair<String, String>>,
+    ): String {
+        val my = mySkills.joinToString("\n") { (n, d) -> "- $n：$d" }.ifBlank { "- （未填写）" }
+        val opp = opponentSkills.joinToString("\n") { (n, d) -> "- $n：$d" }.ifBlank { "- （未填写）" }
+        val fb = feedbacks.joinToString("\n") { (d, c) -> "- $d：$c" }.ifBlank { "- （暂无）" }
+        val user = buildString {
+            append("我的技术特长：\n$my\n\n")
+            append("对手（$opponentName）技术特长：\n$opp\n\n")
+            if (opponentNotes.isNotBlank()) append("对手备注：$opponentNotes\n\n")
+            append("与该对手交手的执行反馈：\n$fb")
+        }
+        return chat(config, systemTacticsPrompt, user)
+    }
+
+    private val systemTacticsPrompt = """
+        你是一名专业乒乓球教练兼战术分析师。请根据球员自身技术特长、对手的技术特长，
+        以及与该对手交手的执行反馈，给出针对性的比赛应对策略。
+        输出用简洁中文 Markdown，分四部分：
+        1. 对手威胁点分析（1-2 条）
+        2. 发球与接发球策略（针对对手弱点）
+        3. 相持与落点策略（结合自己的特长扬长避短）
+        4. 临场注意事项（结合执行反馈中的教训）
+        要求：每条策略具体可执行（如"多发反手位短球，迫使对手正手起板质量下降"），
+        避免空话；300 字以内。
+    """.trimIndent()
+
     private val systemPlanPrompt = """
         你是一名专业乒乓球教练。请根据球员目标制定一份阶段训练计划。
         输出必须是严格的 JSON，不要输出其他文字或代码围栏。格式：

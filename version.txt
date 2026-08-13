@@ -1,6 +1,6 @@
 {
-  "versionCode": 2,
-  "versionName": "0.01",
-  "updateMessage": "v0.01：训练看板首页（本月统计/阶段进度/14天热力图/类型分布/待办提醒）、计划页快速打卡面板与训练课状态徽标、打卡记录可编辑、检查更新与备份。",
-  "apkDownloadUrl": "https://raw.githubusercontent.com/wacilimonster-source/pingpang/main/0.01/pingpang_v0.01.apk"
+  "versionCode": 3,
+  "versionName": "0.02",
+  "updateMessage": "v0.02：视频播放支持全屏、0.1× 超慢速与逐帧步进；新增技战术档案（我的技术特长 + 多个对手档案 + 执行反馈）；AI 应对建议（内置 opencode MiMo-V2.5，可切换自定义 AI 源）。",
+  "apkDownloadUrl": "https://raw.githubusercontent.com/wacilimonster-source/pingpang/main/0.02/pingpang_v0.02.apk"
 }

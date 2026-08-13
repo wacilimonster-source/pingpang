@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
@@ -56,11 +57,13 @@ private sealed interface UpdateState {
 }
 
 /**
- * 我的（F11/F12/F13）：检查更新、AI 配置入口、备份导出、关于。
+ * 我的（F11/F12/F13）：检查更新、技术特长、对手档案、AI 配置入口、备份导出、关于。
  */
 @Composable
 fun MineScreen(
     onOpenSettings: () -> Unit,
+    onOpenSkills: () -> Unit,
+    onOpenOpponents: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -162,20 +165,39 @@ fun MineScreen(
             }
         }
 
+        // ---------- 技术特长与对手档案 ----------
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.EmojiEvents, contentDescription = null)
+                    Text(
+                        "技战术档案",
+                        modifier = Modifier.padding(start = 8.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                OutlinedButton(onClick = onOpenSkills, modifier = Modifier.fillMaxWidth()) {
+                    Text("我的技术特长")
+                }
+                OutlinedButton(onClick = onOpenOpponents, modifier = Modifier.fillMaxWidth()) {
+                    Text("对手档案（特长 + 执行反馈 + AI 应对）")
+                }
+            }
+        }
+
         // ---------- AI 设置 ----------
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Settings, contentDescription = null)
                     Text(
-                        "AI 设置（制定计划 / 训练复盘）",
+                        "AI 设置（制定计划 / 复盘 / 战术建议）",
                         modifier = Modifier.padding(start = 8.dp),
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
                 Text(
-                    if (AppPrefs.isAiConfigured(context)) "已配置：${AppPrefs.getAiModel(context)}"
-                    else "未配置。需填写接口地址、API Key、模型名",
+                    "当前模型：${AppPrefs.currentAiLabel(context)}",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {

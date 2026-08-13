@@ -94,3 +94,24 @@ data class OpponentType(
     val tactics: String,        // 应对战术
     val historyJson: String,    // 历史交手汇总 JSON
 )
+
+/** 我的技术特长（可维护、持久保存） */
+@Entity(tableName = "my_skill")
+data class MySkill(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,               // 特长名：正手弧圈 / 反手拧拉
+    val description: String,        // 描述：旋转强、落点深...
+    val updatedAt: Long = System.currentTimeMillis(),
+)
+
+/** 对手档案（多个对手，含技术特长与执行反馈） */
+@Entity(tableName = "opponent")
+data class Opponent(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,                       // 对手称呼
+    val skillsJson: String = "[]",          // 技术特长 [{name, desc}]
+    val notes: String = "",                 // 备注（打法风格等）
+    val feedbackJson: String = "[]",        // 执行反馈 [{date, content}]
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+)

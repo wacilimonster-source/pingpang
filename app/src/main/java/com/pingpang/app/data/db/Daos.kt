@@ -6,6 +6,8 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import com.pingpang.app.data.model.MatchRecord
+import com.pingpang.app.data.model.MySkill
+import com.pingpang.app.data.model.Opponent
 import com.pingpang.app.data.model.OpponentType
 import com.pingpang.app.data.model.SkillCard
 import com.pingpang.app.data.model.StagePlan
@@ -123,4 +125,26 @@ interface OpponentTypeDao {
     @Insert suspend fun insert(type: OpponentType): Long
     @Query("SELECT * FROM opponent_type ORDER BY id")
     fun observeAll(): Flow<List<OpponentType>>
+}
+
+@Dao
+interface MySkillDao {
+    @Insert suspend fun insert(skill: MySkill): Long
+    @Update suspend fun update(skill: MySkill)
+    @Delete suspend fun delete(skill: MySkill)
+    @Query("SELECT * FROM my_skill ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<MySkill>>
+}
+
+@Dao
+interface OpponentDao {
+    @Insert suspend fun insert(opponent: Opponent): Long
+    @Update suspend fun update(opponent: Opponent)
+    @Delete suspend fun delete(opponent: Opponent)
+    @Query("SELECT * FROM opponent ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<Opponent>>
+    @Query("SELECT * FROM opponent WHERE id = :id")
+    fun observeById(id: Long): Flow<Opponent?>
+    @Query("SELECT * FROM opponent WHERE id = :id")
+    suspend fun getById(id: Long): Opponent?
 }
