@@ -1,6 +1,6 @@
 {
-  "versionCode": 4,
-  "versionName": "0.03",
-  "updateMessage": "v0.03：更换乒乓训练主题新图标；视频库卡片支持直接删除（可选仅删记录保留文件 / 连同原始文件删除）；播放控制条移出播放区（非全屏时独立显示在画面下方）；修复拍视频黑屏问题（录制时实时预览画面可见）。",
-  "apkDownloadUrl": "https://raw.githubusercontent.com/wacilimonster-source/pingpang/main/0.03/pingpang_v0.03.apk"
+  "versionCode": 5,
+  "versionName": "0.04",
+  "updateMessage": "v0.04：修复停止录制后闪退（改用 Recording.stop() 优雅停止，不再强拆相机）；录制界面按钮改为底部单行布局（录制居中、返回与切换镜头分居左右），减少对画面的遮挡；录制/停止中禁用镜头切换。",
+  "apkDownloadUrl": "https://raw.githubusercontent.com/wacilimonster-source/pingpang/main/0.04/pingpang_v0.04.apk"
 }
