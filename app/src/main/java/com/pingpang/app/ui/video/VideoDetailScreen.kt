@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.AlertDialog
@@ -26,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,8 +54,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.pingpang.app.PingPangApp
 import com.pingpang.app.data.DataCleaner
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Locale
 
 /** 倍速档位：支持 0.1× 超慢速（部分机型音频可能失真，视频帧仍平滑） */
 private val speeds = listOf(0.1f, 0.15f, 0.25f, 0.5f, 1f, 1.5f, 2f)
@@ -75,6 +80,13 @@ fun VideoDetailScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
 
+    // 播放状态（控制条用）：播放/暂停、进度、时长，轮询刷新
+    var isPlaying by remember { mutableStateOf(false) }
+    var position by remember { mutableStateOf(0L) }
+    var duration by remember { mutableStateOf(0L) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableStateOf(0f) }
+
     val clip by db.videoClipDao().observeById(videoId).collectAsState(initial = null)
 
     val player = remember { ExoPlayer.Builder(context).build() }
@@ -84,6 +96,16 @@ fun VideoDetailScreen(
             player.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(it.filePath))))
             player.prepare()
             player.playWhenReady = true
+        }
+    }
+
+    // 轮询播放状态（简单可靠，避免 Listener 复杂度）
+    LaunchedEffect(Unit) {
+        while (true) {
+            isPlaying = player.isPlaying
+            if (!dragging) position = player.currentPosition
+            duration = if (player.duration > 0) player.duration else duration
+            delay(300)
         }
     }
 
@@ -173,7 +195,8 @@ fun VideoDetailScreen(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
                         this.player = player
-                        useController = true
+                        // 控制条从播放区域挪开：非全屏时不显示自带控制条
+                        useController = false
                     }
                 },
                 modifier = Modifier.fillMaxWidth().fillMaxHeight(),
@@ -187,6 +210,33 @@ fun VideoDetailScreen(
             ) {
                 Icon(Icons.Filled.Fullscreen, contentDescription = "全屏")
             }
+        }
+
+        // 分离式控制条：播放/暂停 + 进度条 + 时间（位于播放区域下方）
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            IconButton(onClick = {
+                if (player.isPlaying) player.pause() else player.play()
+            }) {
+                Icon(
+                    if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlaying) "暂停" else "播放",
+                )
+            }
+            Text(formatTime(if (dragging) dragValue.toLong() else position), style = MaterialTheme.typography.labelSmall)
+            Slider(
+                value = if (dragging) dragValue else position.toFloat().coerceIn(0f, duration.toFloat().coerceAtLeast(1f)),
+                onValueChange = {
+                    dragging = true
+                    dragValue = it
+                },
+                onValueChangeFinished = {
+                    player.seekTo(dragValue.toLong())
+                    dragging = false
+                },
+                valueRange = 0f..duration.toFloat().coerceAtLeast(1f),
+                modifier = Modifier.weight(1f),
+            )
+            Text(formatTime(duration), style = MaterialTheme.typography.labelSmall)
         }
 
         // 倍速档位（含 0.1× / 0.15× 超慢速）
@@ -267,4 +317,12 @@ private fun frameDurationMs(player: ExoPlayer): Long {
         return (1000f / fps).toLong().coerceAtLeast(10L)
     }
     return 33L
+}
+
+/** 毫秒 → mm:ss */
+private fun formatTime(ms: Long): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val m = totalSec / 60
+    val s = totalSec % 60
+    return String.format(Locale.US, "%d:%02d", m, s)
 }

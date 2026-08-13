@@ -12,16 +12,24 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,10 +39,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pingpang.app.PingPangApp
+import com.pingpang.app.data.DataCleaner
 import com.pingpang.app.data.VideoThumbnailer
 import com.pingpang.app.data.model.VideoClip
 import com.pingpang.app.ui.common.PingPangViewModelFactory
@@ -65,6 +75,7 @@ fun VideoLibScreen(
     var importing by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var tagFilter by remember { mutableStateOf<String?>(null) }
+    var deleteTarget by remember { mutableStateOf<VideoClip?>(null) }
 
     // 标签聚合（来自 videosJson），用于筛选
     val allTags = remember(clips) {
@@ -201,20 +212,79 @@ fun VideoLibScreen(
                         onClick = { onOpenVideo(clip.id) },
                         modifier = Modifier.aspectRatio(1f),
                     ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomStart) {
+                        Box(Modifier.fillMaxSize()) {
                             if (clip.thumbPath != null) {
                                 LocalImage(path = clip.thumbPath, modifier = Modifier.fillMaxSize(), contentDescription = null)
                             }
                             Text(
                                 (clip.durationMs / 1000).toString() + "s",
                                 style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(4.dp),
+                                modifier = Modifier.align(Alignment.BottomStart).padding(4.dp),
                                 color = MaterialTheme.colorScheme.onPrimary,
                             )
+                            // 卡片右上角删除按钮：点击弹出删除选项
+                            IconButton(
+                                onClick = { deleteTarget = clip },
+                                modifier = Modifier.align(Alignment.TopEnd).size(28.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "删除",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    // 删除选项对话框：仅从记录删除（保留本地文件） / 连同原始文件删除
+    deleteTarget?.let { clip ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("删除视频？") },
+            text = { Text("选择删除方式：") },
+            confirmButton = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                // 仅从 App 记录删除：本地文件保留
+                                dao.delete(clip)
+                                deleteTarget = null
+                                Toast.makeText(context, "已从记录删除（本地文件保留）", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("仅从记录删除（保留本地文件）")
+                    }
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                // 连同原始文件删除（并清理引用与缩略图）
+                                withContext(Dispatchers.IO) {
+                                    DataCleaner.removeVideoRefs(db, clip.id)
+                                    File(clip.filePath).delete()
+                                    clip.thumbPath?.let { File(it).delete() }
+                                }
+                                dao.delete(clip)
+                                deleteTarget = null
+                                Toast.makeText(context, "已删除记录与本地文件", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("连同原始文件一起删除")
+                    }
+                    TextButton(onClick = { deleteTarget = null }, modifier = Modifier.fillMaxWidth()) {
+                        Text("取消")
+                    }
+                }
+            },
+        )
     }
 }

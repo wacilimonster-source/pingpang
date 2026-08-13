@@ -132,16 +132,36 @@ fun RecordScreen(
         }
     }
 
+    // 绑定实时预览（修复：之前只绑定录制 UseCase，导致预览黑屏）
+    fun bindPreview(provider: ProcessCameraProvider) {
+        val preview = androidx.camera.core.Preview.Builder().build()
+        preview.setSurfaceProvider(previewView.surfaceProvider)
+        provider.bindToLifecycle(lifecycleOwner, cameraSelector, preview)
+    }
+
+    // 进入页面（已授权）即显示实时画面
+    LaunchedEffect(granted, cameraSelector) {
+        if (granted) {
+            ProcessCameraProvider.getInstance(context).addListener({
+                try {
+                    bindPreview(ProcessCameraProvider.getInstance(context).get())
+                } catch (e: Exception) { /* ignore */ }
+            }, ContextCompat.getMainExecutor(context))
+        }
+    }
+
     fun toggleRecording() {
         if (!granted) {
             permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
             return
         }
         if (recording) {
-            // 停止：通过解除绑定触发录制 finalize（简化方案）
+            // 停止：解除绑定触发录制 finalize，然后恢复实时预览
             ProcessCameraProvider.getInstance(context).addListener({
                 try {
-                    ProcessCameraProvider.getInstance(context).get().unbindAll()
+                    val provider = ProcessCameraProvider.getInstance(context).get()
+                    provider.unbindAll()
+                    bindPreview(provider)
                 } catch (e: Exception) { /* ignore */ }
                 recording = false
             }, ContextCompat.getMainExecutor(context))
@@ -165,7 +185,10 @@ fun RecordScreen(
                 val recorder = Recorder.Builder().build()
                 val videoCapture = VideoCapture.withOutput(recorder)
                 provider.unbindAll()
-                provider.bindToLifecycle(lifecycleOwner, cameraSelector, videoCapture)
+                // 预览 + 录制 同时绑定（录制过程中画面持续可见）
+                val preview = androidx.camera.core.Preview.Builder().build()
+                preview.setSurfaceProvider(previewView.surfaceProvider)
+                provider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, videoCapture)
                 recording = true
 
                 val options = FileOutputOptions.Builder(file).build()

@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "0.02",
-  "updateMessage": "v0.02：视频播放支持全屏、0.1× 超慢速与逐帧步进；新增技战术档案（我的技术特长 + 多个对手档案 + 执行反馈）；AI 应对建议（内置 opencode MiMo-V2.5，可切换自定义 AI 源）。",
-  "apkDownloadUrl": "https://raw.githubusercontent.com/wacilimonster-source/pingpang/main/0.02/pingpang_v0.02.apk"
+  "versionCode": 4,
+  "versionName": "0.03",
+  "updateMessage": "v0.03：更换乒乓训练主题新图标；视频库卡片支持直接删除（可选仅删记录保留文件 / 连同原始文件删除）；播放控制条移出播放区（非全屏时独立显示在画面下方）；修复拍视频黑屏问题（录制时实时预览画面可见）。",
+  "apkDownloadUrl": "https://raw.githubusercontent.com/wacilimonster-source/pingpang/main/0.03/pingpang_v0.03.apk"
 }
